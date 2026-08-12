@@ -92,19 +92,30 @@ def cosine_similarity(a, b) -> float:
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
+def embed_chunks(chunks: list[dict]) -> list[dict]:
+    """
+    Embeds every chunk once and attaches the vector to it.
+    Run this a single time per document, then reuse the result
+    for as many questions as you like.
+    """
+    texts = [c["text"] for c in chunks]
+    vectors = embed_texts(texts)
+    for chunk, vector in zip(chunks, vectors):
+        chunk["vector"] = vector
+    return chunks
+
+
 def find_relevant_chunks_semantic(chunks: list[dict], query: str, top_n: int = 5) -> list[dict]:
     """
-    Ranks chunks by meaning, not shared words.
-    Embeds every chunk and the question, then keeps the closest chunks.
+    Ranks pre-embedded chunks against the question.
+    Assumes embed_chunks has already attached a 'vector' to each chunk,
+    so this only embeds the short question — not the whole document.
     """
-    # Embed all chunk texts in one call, then the question
-    chunk_texts = [c["text"] for c in chunks]
-    chunk_vectors = embed_texts(chunk_texts)
     query_vector = embed_texts([query])[0]
 
     scored = []
-    for chunk, vector in zip(chunks, chunk_vectors):
-        score = cosine_similarity(query_vector, vector)
+    for chunk in chunks:
+        score = cosine_similarity(query_vector, chunk["vector"])
         scored.append((score, chunk))
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
@@ -153,6 +164,7 @@ if __name__ == "__main__":
     else:
         print(f"Extracted {len(pages)} pages.")
         chunks = chunk_pages(pages, pages_per_chunk=1)
+        chunks = embed_chunks(chunks)
         relevant = find_relevant_chunks_semantic(chunks, args.question)
 
         if not relevant:

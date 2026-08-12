@@ -802,3 +802,109 @@ the single miss explained rather than mysterious. That's the difference between
 
 &#x20; page number. Need to pick one and label it.
 
+
+
+\------------------------------------------------------------------------------------
+
+
+
+\## Decision: not fixing the bitcoin retrieval case (for now)
+
+
+
+\*\*The limitation, stated honestly.\*\* "How many bitcoin units does Tesla hold" is
+
+a simple question, plainly worded, with the answer sitting in a clearly labelled
+
+table on p.73. A mature product would be expected to answer it easily. My system
+
+doesn't — it's the one miss in the 9/10 eval. This is a real weakness, not an
+
+edge case I'm explaining away.
+
+
+
+\*\*Why it fails (already diagnosed).\*\* Three things stack: the page's meaning is
+
+dominated by fair-value methodology text, so its embedding drifts from "bitcoin
+
+holdings"; the question says "hold"/"Tesla" while the page says "held"/"our"; and
+
+decoy pages repeat the query words without holding the figure.
+
+
+
+\*\*The fix I'm choosing not to build yet.\*\* Hybrid retrieval — run keyword and
+
+semantic search together and combine the scores. Keyword would catch the literal
+
+"bitcoin"/"11,509"; semantic catches meaning. This is what production systems do.
+
+
+
+\*\*Why I'm skipping it.\*\* At 9/10, chasing this one case buys little next to
+
+building the web interface, which doesn't exist yet. A working app answering 9/10
+
+is worth far more to show than a script answering 10/10 with no front end. This
+
+is a prioritisation decision, not a claim the problem is unimportant — and it's
+
+logged so it stays visible rather than forgotten.
+
+
+
+\*\*Interview version.\*\* I found a real retrieval weakness, diagnosed why it
+
+happens, identified the fix (hybrid search), and made a deliberate call to
+
+prioritise a shippable product over a marginal accuracy gain. Revisit when moving
+
+beyond a single-document demo.
+
+
+
+\----------------------------------------------------------------------------------
+
+
+
+\## Caching the embeddings — embed once, reuse
+
+
+
+\*\*The waste.\*\* The semantic search function embedded every chunk every time it
+
+ran. So each question re-embedded the whole document — the eval was embedding all
+
+137 pages ten times in one run. The document never changes between questions, so
+
+all of that after the first time was wasted cost and time.
+
+
+
+\*\*The fix.\*\* Split it in two. embed\_chunks() embeds the document once and attaches
+
+each vector to its chunk. find\_relevant\_chunks\_semantic() now assumes that's been
+
+done and only embeds the short question. Call embed\_chunks once, reuse for every
+
+question.
+
+
+
+\*\*Result.\*\* Eval runs much faster and costs \~90% less in embedding calls. Score
+
+stayed 9/10 — verified by rerunning the same ten questions. Caching changes speed,
+
+not behaviour, and the eval is what proves it: I can now change how the code works
+
+and confirm the answers didn't move.
+
+
+
+\*\*Concept.\*\* Caching = compute an expensive thing once, store it, reuse it. The
+
+eval doubling as a safety net for refactoring is the bigger lesson — a test that
+
+lets you improve code without fear of silently breaking it.
+

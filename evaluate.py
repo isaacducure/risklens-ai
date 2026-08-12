@@ -3,7 +3,7 @@ Runs a fixed set of questions through the pipeline and shows the answers
 side by side, so accuracy can be judged consistently after any change.
 Scoring is done by you reading each row — the model doesn't grade itself.
 """
-from analyzer import extract_pages, chunk_pages, find_relevant_chunks_semantic, analyze_with_ai
+from analyzer import extract_pages, chunk_pages, embed_chunks, find_relevant_chunks_semantic, analyze_with_ai
 
 PDF = "treport25.pdf"
 
@@ -35,7 +35,8 @@ def run():
     print(f"Loading {PDF}...")
     pages = extract_pages(PDF)
     chunks = chunk_pages(pages, pages_per_chunk=1)
-    print(f"{len(pages)} pages, {len(chunks)} chunks\n")
+    chunks = embed_chunks(chunks)
+    print(f"{len(pages)} pages, {len(chunks)} chunks (embedded once)\n")
 
     for i, (cat, q, expected) in enumerate(EVAL, 1):
         relevant = find_relevant_chunks_semantic(chunks, q)
