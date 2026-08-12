@@ -1,5 +1,6 @@
 import argparse
 import os
+import numpy as np
 from pypdf import PdfReader
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -9,6 +10,17 @@ load_dotenv()
 
 # Initialize the OpenAI client (automatically finds your OPENAI_API_KEY)
 client = OpenAI()
+def embed_texts(texts: list[str]) -> list:
+    """
+    Turns a list of texts into a list of embedding vectors.
+    Each vector is a list of numbers representing that text's meaning.
+    One API call handles the whole batch.
+    """
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=texts
+    )
+    return [item.embedding for item in response.data]
 
 def extract_pages(pdf_path: str) -> list[dict]:
     """
@@ -71,6 +83,33 @@ def find_relevant_chunks(chunks: list[dict], query: str, top_n: int = 5) -> list
     scored.sort(key=lambda pair: pair[0], reverse=True)
     return [chunk for score, chunk in scored[:top_n] if score > 0]
 
+def cosine_similarity(a, b) -> float:
+    """
+    Measures how aligned two vectors are, from -1 to 1.
+    Higher means more similar in meaning.
+    """
+    a, b = np.array(a), np.array(b)
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+def find_relevant_chunks_semantic(chunks: list[dict], query: str, top_n: int = 5) -> list[dict]:
+    """
+    Ranks chunks by meaning, not shared words.
+    Embeds every chunk and the question, then keeps the closest chunks.
+    """
+    # Embed all chunk texts in one call, then the question
+    chunk_texts = [c["text"] for c in chunks]
+    chunk_vectors = embed_texts(chunk_texts)
+    query_vector = embed_texts([query])[0]
+
+    scored = []
+    for chunk, vector in zip(chunks, chunk_vectors):
+        score = cosine_similarity(query_vector, vector)
+        scored.append((score, chunk))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [chunk for score, chunk in scored[:top_n]]
+
 def analyze_with_ai(context: str, question: str) -> str:
     """
     Answers a question using ONLY the supplied context, with page citations.
@@ -113,8 +152,8 @@ if __name__ == "__main__":
         print("No text could be extracted from this PDF.")
     else:
         print(f"Extracted {len(pages)} pages.")
-        chunks = chunk_pages(pages)
-        relevant = find_relevant_chunks(chunks, args.question)
+        chunks = chunk_pages(pages, pages_per_chunk=1)
+        relevant = find_relevant_chunks_semantic(chunks, args.question)
 
         if not relevant:
             print("No relevant sections found for that question.")
